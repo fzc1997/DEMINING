@@ -26,7 +26,7 @@ DEMINING_main_flow(){
     #ref_genome="hg19" or "hg38"
 
     ####################init END#################################################
-    while getopts :1:2:s:o:n:g:t:p: ARGS  
+    while getopts :1:2:s:o:n:g:t:S:p: ARGS  
     do  
     case $ARGS in   
         1)  
@@ -50,9 +50,13 @@ DEMINING_main_flow(){
         g)  
             ref_genome=$OPTARG
             ;;  
-        p) ###### Sat Feb 22 15:48:50 CST 2020 fzc; specify run step when fix 
-            step=$OPTARG
+        S) 
+            Step=$OPTARG
             ;;  
+            ###### Sat Feb 22 15:48:50 CST 2020 fzc; specify run Step when fix 
+        p)
+            patch_flag=$OPTARG
+            ;;
         *)  
             echo "Unknown option: $ARGS"
             ;;
@@ -72,8 +76,8 @@ DEMINING_main_flow(){
         }
     threads_tmp_a="__${threads}__"
     test "$threads_tmp_a" == "____" && threads=10
-    step_tmp_a="__${step}__"
-    test "$step_tmp_a" == "____" && step=01234
+    Step_tmp_a="__${Step}__"
+    test "$Step_tmp_a" == "____" && Step=01234
 
     rRNAdeplete_path="${tmp_work_path_0}/0-0-0remove_rRNA"
     HISAT2_mapping_path="${tmp_work_path_0}/1-1-0HISAT_map"
@@ -84,7 +88,7 @@ DEMINING_main_flow(){
     
     echo "#####[`date`]${sample_name} BEGIN..."
 
-    Y_or_N=$(echo "$step"|grep -q "0" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify step
+    Y_or_N=$(echo "$Step"|grep -q "0" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify Step
     if [ "$Y_or_N" == "Y" ];then
     ###0. remove rRNA, remove_rRNA_mapped_reads
     echo "#####[`date`]BEGIN remove_rRNA_mapped_reads"
@@ -100,7 +104,7 @@ DEMINING_main_flow(){
     fq0=$out_fq0
     fi
     fi
-    Y_or_N=$(echo "$step"|grep -q "1" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify step
+    Y_or_N=$(echo "$Step"|grep -q "1" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify Step
     if [ "$Y_or_N" == "Y" ];then
     ###1. mapping, HISAT2_2mismatch_following_BWA_6mismatch_mapping
     if [ "$layout" == "paired" ];then
@@ -112,7 +116,7 @@ DEMINING_main_flow(){
     fi
     fi
 
-    Y_or_N=$(echo "$step"|grep -q "2" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify step
+    Y_or_N=$(echo "$Step"|grep -q "2" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify Step
     if [ "$Y_or_N" == "Y" ];then
     ###2. sam_fine_tune, Markduplicate, BQSR
     echo "######[`date`]BEGIN STEP2_sam_fine_tune"
@@ -120,7 +124,7 @@ DEMINING_main_flow(){
     STEP2_sam_fine_tune $bam_file $fine_tune_path 
     fi
 
-    Y_or_N=$(echo "$step"|grep -q "3" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify step
+    Y_or_N=$(echo "$Step"|grep -q "3" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify Step
     if [ "$Y_or_N" == "Y" ];then
     ###3. Samtools_mpileup Calling
     echo "#####[`date`]BEGIN STEP3_Variant_calling"
@@ -129,7 +133,7 @@ DEMINING_main_flow(){
     STEP3_Variant_calling $bam_file "_recal" $MutationCalling_wp ${sample_name} $ref_genome
     fi
 
-    Y_or_N=$(echo "$step"|grep -q "4" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify step
+    Y_or_N=$(echo "$Step"|grep -q "4" && echo "Y"||echo "N")  ###### Sat Feb 22 16:12:59 CST 2020 fzc; specify Step
     if [ "$Y_or_N" == "Y" ];then
     ###4. CMC_construction 
     echo "#####[`date`]BEGIN STEP4_CMC_construction"
@@ -150,17 +154,22 @@ STEP0_remove_rRNA_mapped_reads(){
     in_fq2=$2
     out_fq1=$3
     out_fq2=$4
+    block_output=${out_fq1}
+    test -s $block_output -a "${patch_flag}" == "True" ||{  
     bwa mem -t ${thread} ${rDNA_index_bwa_mem} $in_fq1  $in_fq2|samtools view -bh  -f 4 |samtools sort -n  -o ${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam 
     samtools fastq -c 6 -1 ${out_fq1} -2 ${out_fq2} -s /dev/null ${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam
     # fastqc_out=`dirname ${out_fq1}`/fastqc_out
     # test -d $fastqc_out ||mkdir  $fastqc_out
     # $fastqc -o ${fastqc_out} -d ~/tmp -q ${out_fq1} ${out_fq2}  
-
+    }
     elif [ "$layout" == "single" ];then
     in_fq0=$1
     out_fq0=$2
+    block_output=${out_fq0}
+    test -s $block_output -a "${patch_flag}" == "True" ||{  
     bwa mem -t ${thread} ${rDNA_index_bwa_mem} $in_fq0|samtools view  -bh  -f 4 |samtools sort -n  -o ${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam 
     samtools fastq  -s ${rRNAdeplete_path}/${sample_name}_singleton.fq ${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam |gzip > $out_fq0
+    }
 	fi
 }
 STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
@@ -187,6 +196,8 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         fq1=$6
         fq2=$7
         ### 1. HISAT2 2 mismatches mapping
+        block_output=${combine_bam}/${sample_name}_combine.bam
+        test -s $block_output -a "${patch_flag}" == "True" ||{  
         echo "hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam"
         hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam  
         
@@ -203,9 +214,12 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         ### 2. BWA 6 mismatches mapping
         
         bwa mem -t ${threads}  -A 1 -B 4  ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz  ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam |tee 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log
+        }
     elif [ "$layout" == "single" ];then
 
         fq0=$6
+        block_output=${combine_bam}/${sample_name}_combine.bam
+        test -s $block_output -a "${patch_flag}" == "True" ||{  
         hisat2 --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -U $fq0 -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam |tee 2>${HISAT_map}/log_HISAT2_2mismatch_${sample_name}_`date +%Y_%m_%d`.log ###### Tue Dec 17 19:58:15 CST 2019 fzc; change log path
 
         samtools view -h -F 4 ${HISAT_map}/${sample_name}_HISAT2_mapped.sam|awk 'BEGIN{FS="XM:i:"}{if($0 ~/^@/){print $0}else{if ($0 ~ "XM"){split($2,a,"\t");if ( a[1] <= 2 ) print $0 } else print $0 " not have XM tag" }}'|awk 'BEGIN{FS="NH:i:"}{if($0 ~/^@/){print $0}else{if ($0 ~ "NH"){split($2,a,"\t");if ( a[1] == 1 ) print $0 } else print $0 " not have NH tag" }}' >${HISAT_map}/${sample_name}_unique_mismatch2.sam &
@@ -213,10 +227,13 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         bedtools bamtofastq -i  ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam -fq /dev/stdout | gzip >${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz
         ### 2. BWA 6 mismatches mapping
         bwa mem -t ${threads} ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam
+        }
     else
         echo "Unknown layout:$layout, please specify single or paired." 
 
     fi
+    block_output=${combine_bam}/${sample_name}_combine.bam
+    test -s $block_output -a "${patch_flag}" == "True" ||{  
     python ${DEMINING_path}/src/bwa_unique_mismatch6.py ${bwa_map}/${sample_name}_bwa_mapped.sam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam 
     samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
     samtools view -bT ${ref_genome_path} -o ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam |tee 2>>$samtools_log_file
@@ -241,6 +258,7 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     done
     
     echo "#####[`date`]${sample_name} end rm internal files"
+    }
 }
 STEP2_sam_fine_tune(){
     #sam_fine_tune $bam_file $fine_tune_path $bam_file_basename_prefix
@@ -252,12 +270,11 @@ STEP2_sam_fine_tune(){
         bam_file_basename_prefix=`basename $bam_file|awk -F".bam" '{print $1}'`
     fi
     bam_file_prefix=${fine_tune_path}/${bam_file_basename_prefix}
+    block_output=${bam_file_prefix}_rgadd_dedupped_split_recal.bam
+    test -s $block_output -a "${patch_flag}" == "True" ||{  
 
-    
     knownSNP_for_BQSR=$dbSNP_all 
-    
     picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
-
     picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics 
     samtools index ${bam_file_prefix}_rgadd_dedupped.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped.bai && rm ${bam_file_prefix}_rgadd_dedupped.bai
@@ -287,6 +304,7 @@ STEP2_sam_fine_tune(){
     do
     test -e $file1 && rm $file1
     done
+    }
 }
 STEP3_Variant_calling(){
     #bmc_Variant_filter $bam_file $tag $work_path $sample_name
@@ -298,6 +316,8 @@ STEP3_Variant_calling(){
     local sample_name=$4
     local ref_genome=$5
     test -d $MutationCalling_wp || mkdir -p $MutationCalling_wp
+    block_output=${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
+    test -s $block_output -a "${patch_flag}" == "True" ||{  
     #####All editing sites (BQ20; overhang6; ES95)
     
     perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
@@ -306,6 +326,7 @@ STEP3_Variant_calling(){
     python ${DEMINING_path}/src/npileup_to_ES_variant_allvariants.py ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag} 0.95 2 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
     test -e  ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag} && rm  ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
     rm ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag} &
+    }
 }
 STEP4_DeepDDR_predict(){
     # RADAR_out="${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants_recal"
@@ -326,10 +347,12 @@ STEP4_DeepDDR_predict(){
     else 
     DeepDDR_path="${DEMINING_path}/DeepDDR_Transfer"
     fi
-
+    block_output=$predict_out_file
+    test -s $block_output -a "${patch_flag}" == "True" ||{  
     CMC_file="${CMCconst_wp}/2-1-1-CMC_ER5HPB3MR2_Length-${length0}_Sample-${sample_name}.txt.gz"
     echo "python3 ${DEMINING_path}/src/CMC_construction_func.py $sample_name $RADAR_out $BamPath $CMCconst_wp $Treads $Patch $ref_genome_path $DeepDDR_path $CMC_file $predict_out_file"
     python3 ${DEMINING_path}/src/CMC_construction_func.py $sample_name $RADAR_out $BamPath $CMCconst_wp $Treads $Patch $ref_genome_path $DeepDDR_path $CMC_file $predict_out_file
+    }
 
 
     
