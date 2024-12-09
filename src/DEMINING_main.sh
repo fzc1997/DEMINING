@@ -26,7 +26,6 @@ DEMINING_main_flow(){
     #ref_genome="hg19" or "hg38"
 
     ####################init END#################################################
-    Clean_internal=False
     while getopts :1:2:s:o:n:g:t:S:p:C ARGS  
     do  
     case $ARGS in   
@@ -59,7 +58,7 @@ DEMINING_main_flow(){
             patch_flag=$OPTARG
             ;;
         C)
-            Clean_internal=True
+            Clean_internal=$OPTARG
             ;;
         *)  
             echo "Unknown option: $ARGS"

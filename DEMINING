@@ -176,7 +176,7 @@ one_command_work_flow(){
     if [ "$tmp_a" == "____" ];then
     Step=01234
     fi
-    bash ${MYDIR}/src/DEMINING_main.sh DEMINING_main_flow -1 ${fq1} -2 ${fq2} -o ${work_path} -n $sample_name  -t $threads -g $genome_build_version -S ${Step} -p $patch_flag
+    bash ${MYDIR}/src/DEMINING_main.sh DEMINING_main_flow -1 ${fq1} -2 ${fq2} -o ${work_path} -n $sample_name  -t $threads -g $genome_build_version -S ${Step} -p $patch_flag -C $Clean_internal 
 }
 Read_mapping_work_flow(){
     Step=0123
