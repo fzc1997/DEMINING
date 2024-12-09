@@ -26,7 +26,8 @@ version(){
     echo "Version: 1.0 2023/07/31"
     exit 1
 }
-patch_flag=Flase
+patch_flag=False
+Clean_internal=False
 while getopts :1:2:o:n:c:t:g:f:s:b:pS:vh ARGS  
     do  
     case $ARGS in   
@@ -65,6 +66,9 @@ while getopts :1:2:o:n:c:t:g:f:s:b:pS:vh ARGS
             ;;
         S)
             Step=$OPTARG
+            ;;
+        C)
+            Clean_internal=True
             ;;
         h)
             help_print

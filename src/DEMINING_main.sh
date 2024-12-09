@@ -26,7 +26,8 @@ DEMINING_main_flow(){
     #ref_genome="hg19" or "hg38"
 
     ####################init END#################################################
-    while getopts :1:2:s:o:n:g:t:S:p: ARGS  
+    Clean_internal=False
+    while getopts :1:2:s:o:n:g:t:S:p:C ARGS  
     do  
     case $ARGS in   
         1)  
@@ -56,6 +57,9 @@ DEMINING_main_flow(){
             ###### Sat Feb 22 15:48:50 CST 2020 fzc; specify run Step when fix 
         p)
             patch_flag=$OPTARG
+            ;;
+        C)
+            Clean_internal=True
             ;;
         *)  
             echo "Unknown option: $ARGS"
@@ -171,6 +175,7 @@ STEP0_remove_rRNA_mapped_reads(){
     samtools fastq  -s ${rRNAdeplete_path}/${sample_name}_singleton.fq ${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam |gzip > $out_fq0
     }
 	fi
+    
 }
 STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     #HISAT2_2mismatch_following_BWA_6mismatch_mapping $sample_name $layout $fq_path $HISAT2_mapping_path $BWA_mapping_path $combine_bam
@@ -184,11 +189,11 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     layout=$2
     HISAT2_mapping_path=$3
     BWA_mapping_path=$4
-    combine_bam=$5
+    fine_tune_path=$5
 
     test -d $HISAT2_mapping_path || mkdir -p $HISAT2_mapping_path
     test -d $BWA_mapping_path || mkdir -p $BWA_mapping_path
-    test -d ${combine_bam} ||mkdir -p ${combine_bam}
+    test -d ${fine_tune_path} ||mkdir -p ${fine_tune_path}
     HISAT_map=$HISAT2_mapping_path
     bwa_map=${BWA_mapping_path}
 
@@ -196,7 +201,7 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         fq1=$6
         fq2=$7
         ### 1. HISAT2 2 mismatches mapping
-        block_output=${combine_bam}/${sample_name}_combine.bam
+        block_output=${fine_tune_path}/${sample_name}_combine.bam
         test -s $block_output -a "${patch_flag}" == "True" ||{  
         echo "hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam"
         hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam  
@@ -218,7 +223,7 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     elif [ "$layout" == "single" ];then
 
         fq0=$6
-        block_output=${combine_bam}/${sample_name}_combine.bam
+        block_output=${fine_tune_path}/${sample_name}_combine.bam
         test -s $block_output -a "${patch_flag}" == "True" ||{  
         hisat2 --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -U $fq0 -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam |tee 2>${HISAT_map}/log_HISAT2_2mismatch_${sample_name}_`date +%Y_%m_%d`.log ###### Tue Dec 17 19:58:15 CST 2019 fzc; change log path
 
@@ -232,7 +237,7 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         echo "Unknown layout:$layout, please specify single or paired." 
 
     fi
-    block_output=${combine_bam}/${sample_name}_combine.bam
+    block_output=${fine_tune_path}/${sample_name}_combine.bam
     test -s $block_output -a "${patch_flag}" == "True" ||{  
     python ${DEMINING_path}/src/bwa_unique_mismatch6.py ${bwa_map}/${sample_name}_bwa_mapped.sam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam 
     samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
@@ -241,15 +246,15 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     samtools view -H ${bwa_map}/${sample_name}_unmapped.sort.bam > ${bwa_map}/${sample_name}_bwa.header |tee 2>>$samtools_log_file 
     
     wait
-    cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam > ${combine_bam}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
-    samtools view -bT ${ref_genome_path} -o  ${combine_bam}/${sample_name}_accepted_hits.nbam ${combine_bam}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
-    samtools sort ${combine_bam}/${sample_name}_accepted_hits.nbam -o ${combine_bam}/${sample_name}_accepted_hits.sort.bam |tee 2>>$samtools_log_file
+    cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam > ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
+    samtools view -bT ${ref_genome_path} -o  ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
+    samtools sort ${fine_tune_path}/${sample_name}_accepted_hits.nbam -o ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam |tee 2>>$samtools_log_file
 
-    samtools merge -f ${combine_bam}/${sample_name}_combine.bam ${combine_bam}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
-    samtools flagstat  ${combine_bam}/${sample_name}_combine.bam |tee >${combine_bam}/${sample_name}_combine_flagstat.log 
-    #samtools index ${combine_bam}/${sample_name}_combine.bam  2>>$samtools_log_file
-    samtools index ${combine_bam}/${sample_name}_combine.bam || samtools index -c ${combine_bam}/${sample_name}_combine.bam |tee 2>>$samtools_log_file ###### Sat Oct 8 13:54:25 CST 2022
-    need_rm_internal_file_list=(${combine_bam}/${sample_name}_accepted_hits.nsam ${combine_bam}/${sample_name}_accepted_hits.nbam ${combine_bam}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_bwa.header ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.sort.bam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam ${bwa_map}/${sample_name}_bwa_mapped.sam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam ${HISAT_map}/${sample_name}_unique_mismatch2.sam ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz  ${HISAT_map}/${sample_name}_hisat2_unmap.readid ${HISAT_map}/${sample_name}_un_conc_2.fastq.gz ${HISAT_map}/${sample_name}_un_conc_1.fastq.gz) #${HISAT_map}/${sample_name}_HISAT2_unmapped.bam
+    samtools merge -f ${fine_tune_path}/${sample_name}_combine.bam ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
+    samtools flagstat  ${fine_tune_path}/${sample_name}_combine.bam |tee >${fine_tune_path}/${sample_name}_combine_flagstat.log 
+    #samtools index ${fine_tune_path}/${sample_name}_combine.bam  2>>$samtools_log_file
+    samtools index ${fine_tune_path}/${sample_name}_combine.bam || samtools index -c ${fine_tune_path}/${sample_name}_combine.bam |tee 2>>$samtools_log_file ###### Sat Oct 8 13:54:25 CST 2022
+    need_rm_internal_file_list=(${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam ${fine_tune_path}/${sample_name}_accepted_hits.nsam ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_bwa.header ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.sort.bam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam ${bwa_map}/${sample_name}_bwa_mapped.sam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam ${HISAT_map}/${sample_name}_unique_mismatch2.sam ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz  ${HISAT_map}/${sample_name}_hisat2_unmap.readid ${HISAT_map}/${sample_name}_un_conc_2.fastq.gz ${HISAT_map}/${sample_name}_un_conc_1.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam) #
 
     echo "#####[`date`]${sample_name} satrt rm internal files"
     for need_rm_internal_file in ${need_rm_internal_file_list[@]}
@@ -306,6 +311,18 @@ STEP2_sam_fine_tune(){
     done
     }
 }
+_STEP3_Variant_calling_mpileup_frac(){
+    ###### Thu Oct 26 15:55:07 CST 2023
+    chrn=$1
+    region=$2
+    
+    perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam --region $region -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 |perl -ane 'print "$F[0]:$F[1]\t",join("\t",@F[2..$#F]),"\n"' |python3 ${DEMINING_path}/src/npileup_to_ES_variant_allvariants_Line.py /dev/stdin 0.95 2 >${mpileup_frac_path}/${sample_name}_${chrn}.BQ20o6ES95v2.allvariants${tag}
+    
+    # test -e ${hyper_path}/${sample_name}_${chrn}.BQ20o6ES95v0${suffix} && rm ${hyper_path}/${sample_name}_${chrn}.BQ20o6ES95v0${suffix}
+    # 
+    # rm ${hyper_path}/${sample_name}_${chrn}.BQ20o6ES95v0.new${suffix} 
+
+}
 STEP3_Variant_calling(){
     #bmc_Variant_filter $bam_file $tag $work_path $sample_name
     #Used for: Calling and filtering, Calling mutation use samtools mpileup, filtering same as gatk_Variant_filter.
@@ -318,15 +335,57 @@ STEP3_Variant_calling(){
     test -d $MutationCalling_wp || mkdir -p $MutationCalling_wp
     block_output=${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
     test -s $block_output -a "${patch_flag}" == "True" ||{  
-    #####All editing sites (BQ20; overhang6; ES95)
+    #####All editing sites (BQ20; overhang6; ES95)    
+    mpileup_frac_path="${MutationCalling_wp}/_STEP3_Variant_calling_mpileup_frac"
+    test -d $mpileup_frac_path ||mkdir -p $mpileup_frac_path
     
-    perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
-    perl -ane 'print "$F[0]:$F[1]\t",join("\t",@F[2..$#F]),"\n"' ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag} >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag}
-    
-    python ${DEMINING_path}/src/npileup_to_ES_variant_allvariants.py ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag} 0.95 2 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
-    test -e  ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag} && rm  ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
-    rm ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag} &
+    ## split the longest chr to 2 fractions
+    fa_fai=${ref_genome_path}.fai
+    longest_chr_name=$(awk 'NR==1{print $1}' $fa_fai)
+    longest_chr_HalfLength=$(awk 'NR==1{print "scale=0;"$2"/2"}' $fa_fai|bc -l )
+    longest_chr_HalfLength1=$(awk 'NR==1{print "scale=0;"$2"/2+1"}' $fa_fai|bc -l )
+    longest_chr_Length=$(awk 'NR==1{print $2}' $fa_fai)
+    if [ "$ref_genome" == "hg38" ] || [ "$ref_genome" == "hg19" ]||[ "$ref_genome" == "mm10" ]||[ "$ref_genome" == "rheMac10" ]||[ "$ref_genome" == "ce11" ];then
+        chr_list=($(awk '$1!~/_/{print $1}' $fa_fai))
+    else
+        echo "unsupport genome_build_version: $ref_genome"
+        exit 1
+    fi
+
+
+    _STEP3_Variant_calling_mpileup_frac ${longest_chr_name}_1 ${longest_chr_name}:1-${longest_chr_HalfLength} &
+    if [ $threads -eq 1 ]; then
+    wait
+    fi
+ 
+    _STEP3_Variant_calling_mpileup_frac ${longest_chr_name}_2 ${longest_chr_name}:${longest_chr_HalfLength1}-${longest_chr_Length} &
+    if [ $threads -eq 2 ]; then
+    wait
+    fi
+    threads2=$(echo "$threads-2"|bc -l)
+
+    for chrn in $(echo ${chr_list[@]}|awk 'BEGIN{RS=" "}$0!="'${longest_chr_name}'"' );do
+    {
+        _STEP3_Variant_calling_mpileup_frac $chrn $chrn 
+    }&
+    metc $threads2 
+    done
+    wait
+    cat ${mpileup_frac_path}/${sample_name}_*.BQ20o6ES95v2.allvariants${suffix} > ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${suffix}
+    # test -s ${MutationCallFiltering_wp}/${sample_name}.BQ20o6ES95v2.allvariants${suffix} && rm ${mpileup_frac_path}/${sample_name}_*.BQ20o6ES95v2.allvariants${suffix}
+    # test -s $from_bam1 && rm $from_bam1 
+    # test -s ${from_bam1}.bai && rm ${from_bam1}.bai
+    # test -s ${from_bam1/.bam/.bai} && rm ${from_bam1/.bam/.bai}
+    merm ${mpileup_frac_path}/${sample_name}_*.BQ20o6ES95v2.allvariants${suffix} 
     }
+    # perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
+    # perl -ane 'print "$F[0]:$F[1]\t",join("\t",@F[2..$#F]),"\n"' ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag} >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag}
+    # python ${DEMINING_path}/src/npileup_to_ES_variant_allvariants.py ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag} 0.95 2 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
+    # test -e  ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag} && rm  ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
+    # rm ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag} &
+
+
+    
 }
 STEP4_DeepDDR_predict(){
     # RADAR_out="${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants_recal"
@@ -354,6 +413,12 @@ STEP4_DeepDDR_predict(){
     python3 ${DEMINING_path}/src/CMC_construction_func.py $sample_name $RADAR_out $BamPath $CMCconst_wp $Treads $Patch $ref_genome_path $DeepDDR_path $CMC_file $predict_out_file
     }
 
+    if [ "${Clean_internal}" == "True" ];then
+    tmp_remove_file_list=(${rRNAdeplete_path}/${sample_name}_R1.fastq.gz ${rRNAdeplete_path}/${sample_name}_R2.fastq.gz ${rRNAdeplete_path}/${sample_name}.fastq.gz ${fine_tune_path}/${sample_name}_combine.bam ${CMCconst_wp}/1-1-1-MSA_out_pysam_601bp_ER5HPB3MR2_${sample_name}.txt.gz ${CMCconst_wp}/2-1-1-CMC_ER5HPB3MR2_Length-601_Sample-${sample_name}.txt.gz)
+    for file1 in ${tmp_remove_file_list[@]};do
+    test -e $file1 && rm $file1
+    done
+    fi
 
     
 
