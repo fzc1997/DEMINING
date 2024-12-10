@@ -1,0 +1,218 @@
+#!/usr/bin/env bash
+####### Mon Dec 2 14:56:30 CST 2024
+# add -p patch_flag, fzc
+
+work_path=$PWD
+MYDIR=$(cd "$(dirname "$0")";pwd)
+MYNAME=DEMINING
+help_print(){
+    echo "Usage: `basename $0` -f Function -1 Path_of_fastq1 -2 Path_of_fastq2 -o Output_path -n Output_name -c Path_of_config_file -t Maximum_threads -g Genome_build_version [ -s Site_list_file -b BAM_file ]";
+        echo "       [-f Function, \"Read_mapping\", \"Variant_classification\" or \"All_steps\"(default \"All_steps\")]";
+        echo "       [-1 Path of fastq1]";
+        echo "       [-2 Path of fastq2]";
+        echo "       [-o Output directory(default current directory)]";
+        echo "       [-n Output name]";
+        echo "       [-c Path of config file(default ${MYDIR}/${MYNAME}.config)]";
+        echo "       [-t Maximum_threads]";
+        echo "       [-g Genome build version, \"hg38\" or \"mm10\"]";
+        echo "       [-s Site list file (No column name, only required when Function == \"Variant_classification\")]";
+        echo "       [-b BAM file (Only required when Function == \"Variant_classification\")]";
+        echo "       [-p (Resume execution from the point of interruption, contingent upon the presence of internal files indicating the process's previous state. Default (without specify this flag): start from scratch)]";
+        echo "Version: 1.0 2023/07/31"
+        exit 1
+
+}
+version(){
+    echo "Version: 1.0 2023/07/31"
+    exit 1
+}
+patch_flag=Flase
+while getopts :1:2:o:n:c:t:g:f:s:b:pS:vh ARGS  
+    do  
+    case $ARGS in   
+        1)  
+            fq1=$OPTARG
+            ;;  
+        2)  
+            fq2=$OPTARG  
+            ;; 
+        o)  
+            work_path=$OPTARG
+            ;;  
+        n)  
+            sample_name=$OPTARG
+            ;; 
+        c)
+            execute_para_file=$OPTARG
+            ;;
+        t)
+            threads=$OPTARG
+            ;;
+        g)
+            genome_build_version=$OPTARG
+            ;;
+        f)
+            Function=$OPTARG
+            ;;
+        s)
+            site_list=$OPTARG
+            ;;
+        b)
+            bam_file=$OPTARG
+            ;;
+        p)
+            patch_flag=True
+            ;;
+        S)
+            Step=$OPTARG
+            ;;
+        h)
+            help_print
+            ;;
+        v)
+            version
+            ;;
+        *)  
+            echo "Unknown option: $ARGS"
+            ;;
+        \?)
+            echo "Invalid option: -$OPTARG" 
+            ;;
+        :)
+            echo "Option -$OPTARG requires an argument." >&2
+            exit 1
+      ;;
+
+    esac
+    done
+check_status(){
+    ###### Sun Mar 1 21:06:32 CST 2020 fzc
+    bin_file=$1
+    status=0
+    if [ -e $bin_file ];then
+        let status+=1
+        test -x $bin_file && let status+=1
+    fi
+    if [ "$status" == "0" ];then
+        echo "$bin_file is non-exist"
+        check_token="F"
+    
+    elif [ "$status" == "1" ];then
+        echo "$bin_file is not executable!"
+        check_token="F" 
+    fi
+    
+}
+
+parse_parameters(){
+    ###### Sun Mar 1 21:06:21 CST 2020 fzc
+    if [ "$genome_build_version" != "hg38" ] && [ "$genome_build_version" != "mm10" ];then
+    echo "unsupport genome_build_version: $genome_build_version"
+    exit 1
+    fi
+    tmp_a="__${execute_para_file}__"
+    if [ "$tmp_a" != "____" ];then
+    execute_para_file=$execute_para_file
+    test -e $execute_para_file || { 
+        echo "The config file($execute_para_file) is non-exist!" 
+        exit 1
+    } 
+    else
+    execute_para_file=$MYDIR/${MYNAME}.conf
+    test -e $execute_para_file || { 
+        echo "Config_file not specified in CMD, and the default config file not find in $execute_para_file" 
+        help_print
+        exit 1
+    }
+    fi
+    test -e $execute_para_file && echo "use $execute_para_file as config_file" 
+    set -a
+    source $execute_para_file
+
+    non_specified_para_list=""
+    non_exists_para_list=""
+    dep_software_list=(samtools hisat2 gatk4 bwa picard bedtools seqtk perl python)
+    for software in ${para_list[@]};do
+    check_status $(which $software)
+    done
+
+    if [ "$genome_build_version" == "hg38" ]||[ "$genome_build_version" == "mm10" ];then
+    para_list_species_specific=(rDNA_index_bwa_mem genome_fasta annotation_splice_sites genome_index_bwa_mem genome_index_gatk dbSNP_all dbSNP_all_index_gatk)
+    fi 
+    for para1 in ${para_list_species_specific[@]}
+    do
+    {
+        para1_value=`eval echo "$"$para1`
+        tmp_a="__${para1_value}__"
+        test "${tmp_a}" == "____" && {
+            non_specified_para_list=$non_specified_para_list"\n"${para1}
+            continue
+        }
+        test -e ${para1_value} || {
+            non_exists_para_list=$non_exists_para_list"\n"${para1_value}
+            continue
+        }
+    }
+    done
+    
+    test "$non_specified_para_list" != "" &&{
+        echo -e "The following para(s) are not specified but necessary:$non_specified_para_list"
+        check_token="F"
+    }   
+    test "$non_exists_para_list" != "" &&{
+        echo -e "The following specified para are not exist:$non_exists_para_list"
+        check_token="F"
+    }   
+    if [ "$check_token" == "F" ];then exit 1; fi
+echo "[`date`]Finish parse_parameters"
+}
+
+one_command_work_flow(){
+    tmp_a="__${Step}__"
+    if [ "$tmp_a" == "____" ];then
+    Step=01234
+    fi
+    bash ${MYDIR}/src/DEMINING_main.sh DEMINING_main_flow -1 ${fq1} -2 ${fq2} -o ${work_path} -n $sample_name  -t $threads -g $genome_build_version -S ${Step} -p $patch_flag
+}
+Read_mapping_work_flow(){
+    Step=0123
+    bash ${MYDIR}/src/DEMINING_main.sh DEMINING_main_flow -1 ${fq1} -2 ${fq2} -o ${work_path} -n $sample_name -t $threads -g $genome_build_version -S ${Step} -p $patch_flag
+}
+Variant_classification_work_flow(){
+    predict_out_file="$work_path/${sample_name}_DEMINING.tsv"
+    CMCconst_wp=${work_path}/${sample_name}_DEMINING_tmp
+    RADAR_out=$site_list
+    bash ${MYDIR}/src/DEMINING_main.sh STEP4_DeepDDR_predict $genome_build_version $sample_name $RADAR_out $bam_file $predict_out_file $CMCconst_wp $threads
+}
+
+if [ "$#" == 0 ];then
+    help_print
+fi
+parse_parameters
+echo "The Parameters of $MYNAME:" 
+cat $execute_para_file|grep -v -e "^#" -e "^$" 
+
+echo "$@"
+tmp_a="__${Function}__"
+
+test -d ${work_path}/${sample_name}_DEMINING_tmp ||mkdir -p ${work_path}/${sample_name}_DEMINING_tmp
+lock_file=${work_path}/${sample_name}_DEMINING_tmp/DEMINING_running.lock 
+if [ -e $lock_file ];then
+    echo "$lock_file exists, make sure no repeat submit and then remove it and rerun."
+    exit 1
+else
+    touch $lock_file
+fi
+if [ "${tmp_a}" == "____" ] || [ "${tmp_a}" == "__All_steps__" ];then
+    one_command_work_flow
+elif [ "${tmp_a}" == "__Read_mapping__" ];then
+    Read_mapping_work_flow
+elif [ "${tmp_a}" == "__Variant_classification__" ];then
+    Variant_classification_work_flow
+else
+    echo "Unsupport Function:${Function}"
+fi
+test -e $lock_file && rm $lock_file
+#rm -rf $dir_of_tmp
+
+
