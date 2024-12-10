@@ -430,6 +430,18 @@ memkdir(){
     test -d $path ||mkdir -p $path  
     done  
 }  
+metc(){
+    max_threads=$1
+    if [ ! "$thread_ctrl_n" ];then
+    thread_ctrl_n=0
+    fi
+    let thread_ctrl_n+=1
+    if [ "$thread_ctrl_n" -eq "$max_threads" ];then
+    wait
+    thread_ctrl_n=0
+    fi
+}
+
 DEMINING_src_path=$(cd "$(dirname "$0")";pwd)
 DEMINING_path=$(dirname $DEMINING_src_path)
 ref_genome_path=$genome_fasta
