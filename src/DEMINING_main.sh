@@ -441,7 +441,12 @@ metc(){
     thread_ctrl_n=0
     fi
 }
-
+merm(){  
+    for file1 in $@  
+    do  
+    if [ -e $file1 ];then rm -r $file1;fi
+    done  
+}  
 DEMINING_src_path=$(cd "$(dirname "$0")";pwd)
 DEMINING_path=$(dirname $DEMINING_src_path)
 ref_genome_path=$genome_fasta
