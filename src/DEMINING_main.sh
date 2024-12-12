@@ -203,22 +203,27 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         block_output=${fine_tune_path}/${sample_name}_combine.bam
         test -s $block_output -a "${patch_flag}" == "True" ||{  
         echo "hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam"
-
+        
+        echo "[`date`] hisat2 mapping" 
         hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam  
+        echo "[`date`] samtools 1" 
         
         samtools view -h -F 4 ${HISAT_map}/${sample_name}_HISAT2_mapped.sam|awk 'BEGIN{FS="XM:i:"}{if($0 ~/^@/){print $0}else{if ($0 ~ "XM"){split($2,a,"\t");if ( a[1] <= 2 ) print $0 } else print $0 " not have XM tag"}}'|awk 'BEGIN{FS="NH:i:"}{if($0 ~/^@/){print $0}else{if ($0 ~ "NH"){split($2,a,"\t");if ( a[1] == 1 ) print $0 } else print $0 " not have NH tag"  }}' >${HISAT_map}/${sample_name}_unique_mismatch2.sam &
         
-        samtools view -bS -f 4 -o ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam
+        # samtools view -bS -f 4 -o ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam
+        echo "[`date`] samtools 2" 
 
         samtools view -f 4 -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam |awk 'BEGIN{FS="\t"}{print $1}'|sort|uniq >${HISAT_map}/${sample_name}_hisat2_unmap.readid 
-
+        echo "[`date`] seqtk 1" 
         seqtk subseq ${HISAT_map}/${sample_name}_un_conc_1.fastq.gz ${HISAT_map}/${sample_name}_hisat2_unmap.readid |gzip > ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz  &
         seqtk subseq ${HISAT_map}/${sample_name}_un_conc_2.fastq.gz ${HISAT_map}/${sample_name}_hisat2_unmap.readid |gzip > ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz  
+        echo "[`date`] seqtk 1 done" 
         wait
 
         ### 2. BWA 6 mismatches mapping
         
         # bwa mem -t ${threads}  -A 1 -B 4  ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz  ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam |tee 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log
+        echo "[`date`] bwa" 
         
         samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
         bwa mem -t ${threads} -A 1 -B 4 ${genome_index_bwa_mem} \
@@ -226,6 +231,7 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
             ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz 2>${bwa_map}/log_BWA_6mismatch_$(date +%Y_%m_%d).log | \
         python ${DEMINING_path}/src/bwa_unique_mismatch6_Line.py | \
         samtools sort --threads ${threads} -T /dev/shm/${sample_name}_temp -o ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
+        echo "[`date`] bwa done" 
 
         }
     elif [ "$layout" == "single" ];then
@@ -256,10 +262,12 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     # samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
     # samtools view -bT ${ref_genome_path} -o ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam |tee 2>>$samtools_log_file
     # samtools sort ${bwa_map}/${sample_name}_unmapped.nbam -o ${bwa_map}/${sample_name}_unmapped.sort.bam |tee 2>>$samtools_log_file
+    echo "[`date`] samtools 3" 
     samtools view -H ${bwa_map}/${sample_name}_unmapped.sort.bam > ${bwa_map}/${sample_name}_bwa.header |tee 2>>$samtools_log_file 
-    
+    echo "[`date`] samtools 3 done" 
     wait
-
+    
+    echo "[`date`] accepted_hits.sort.bam" 
     cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam | \
     samtools view -bT ${ref_genome_path} - 2>>$samtools_log_file | \
     samtools sort --threads ${threads} -o ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam 2>>$samtools_log_file ######## Thu Dec 12 15:40:10 CST 2024, One step
@@ -267,11 +275,14 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     # cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam > ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
     # samtools view -bT ${ref_genome_path} -o  ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
     # samtools sort ${fine_tune_path}/${sample_name}_accepted_hits.nbam -o ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam |tee 2>>$samtools_log_file
-
+    
+    echo "[`date`] samtools 4" 
     samtools merge -f ${fine_tune_path}/${sample_name}_combine.bam ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
     samtools flagstat ${fine_tune_path}/${sample_name}_combine.bam |tee >${fine_tune_path}/${sample_name}_combine_flagstat.log & 
     #samtools index ${fine_tune_path}/${sample_name}_combine.bam  2>>$samtools_log_file
+    echo "[`date`] samtools 5" 
     samtools index ${fine_tune_path}/${sample_name}_combine.bam || samtools index -c ${fine_tune_path}/${sample_name}_combine.bam |tee 2>>$samtools_log_file ###### Sat Oct 8 13:54:25 CST 2022
+    echo "[`date`] samtools 5 done" 
     need_rm_internal_file_list=(${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam ${fine_tune_path}/${sample_name}_accepted_hits.nsam ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_bwa.header ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.sort.bam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam ${bwa_map}/${sample_name}_bwa_mapped.sam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam ${HISAT_map}/${sample_name}_unique_mismatch2.sam ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz  ${HISAT_map}/${sample_name}_hisat2_unmap.readid ${HISAT_map}/${sample_name}_un_conc_2.fastq.gz ${HISAT_map}/${sample_name}_un_conc_1.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam) #
 
     echo "#####[`date`]${sample_name} satrt rm internal files"
@@ -298,23 +309,29 @@ STEP2_sam_fine_tune(){
 
     knownSNP_for_BQSR=$dbSNP_all 
     export _JAVA_OPTIONS="-Xmx2G"
+    echo "[`date`] AddOrReplaceReadGroups" 
     picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
+    echo "[`date`] MarkDuplicates" 
     picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics 
+    echo "[`date`] samtools index" 
     samtools index ${bam_file_prefix}_rgadd_dedupped.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped.bai && rm ${bam_file_prefix}_rgadd_dedupped.bai
     samtools index -c ${bam_file_prefix}_rgadd_dedupped.bam ###### Sun Oct 9 13:35:07 CST 2022
     }
 
-
+    echo "[`date`] gatk SplitNCigarReads" 
     gatk SplitNCigarReads -R ${ref_genome_path} -I ${bam_file_prefix}_rgadd_dedupped.bam -O ${bam_file_prefix}_rgadd_dedupped_split.bam --create-output-bam-index false #  change create-output-bam-index from true (default) to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
+    echo "[`date`] samtools index" 
     samtools index ${bam_file_prefix}_rgadd_dedupped_split.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped_split.bai && rm ${bam_file_prefix}_rgadd_dedupped_split.bai
     samtools index -c ${bam_file_prefix}_rgadd_dedupped_split.bam ###### Sun Oct 9 13:35:07 CST 2022
     }
-
+    echo "[`date`] gatk BaseRecalibrator" 
     gatk BaseRecalibrator -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam --known-sites ${knownSNP_for_BQSR}  -O ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv 
+    echo "[`date`] gatk ApplyBQSR" 
     gatk ApplyBQSR  -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam --create-output-bam-index false # change CREATE_INDEX from true to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
     #gatk ApplyBQSR  -R ${ref_genome_path} -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam
+    echo "[`date`] samtools index" 
     samtools index ${bam_file_prefix}_rgadd_dedupped_split_recal.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped_split_recal.bai && rm ${bam_file_prefix}_rgadd_dedupped_split_recal.bai
     samtools index -c ${bam_file_prefix}_rgadd_dedupped_split_recal.bam ###### Sun Oct 9 13:35:07 CST 2022
