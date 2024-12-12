@@ -22,8 +22,18 @@ for read in bam.fetch(until_eof=True):
         continue
     n_not_xa_mapq_gt_20 += 1
     md_tag = read.get_tag('MD').split()[0]
-    if sum(1 for ab in md_tag if ab.islower()) > 6:
-        continue
+    # if sum(1 for ab in md_tag if ab.islower()) > 6:
+    #     continue
+    flag=0
+    mis=0
+    for ab in md_tag :
+        if ab =='^':
+            flag=1
+        elif ab in [str(x)for x in range(10)]:flag=0
+        elif ab.lower() in  [chr(x) for x in range(97,123)]:
+            if flag==0:
+                mis+=1
+    if mis>6:continue
     bam_unique_mis6.write(read)
 
 bam_unique_mis6.close()

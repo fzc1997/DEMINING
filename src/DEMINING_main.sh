@@ -203,6 +203,7 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         block_output=${fine_tune_path}/${sample_name}_combine.bam
         test -s $block_output -a "${patch_flag}" == "True" ||{  
         echo "hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam"
+
         hisat2  --rna-strandness RF --no-mixed --secondary --no-temp-splicesite --known-splicesite-infile ${annotation_splice_sites} --no-softclip --score-min L,-16,0 --mp 7,7 --rfg 0,7 --rdg 0,7 --max-seeds 20 -k 10 --dta -t -p ${threads} -x ${genome_index_hisat2} -1  $fq1  -2 $fq2  --un-conc-gz ${HISAT_map}/${sample_name}_un_conc_%.fastq.gz -S ${HISAT_map}/${sample_name}_HISAT2_mapped.sam  
         
         samtools view -h -F 4 ${HISAT_map}/${sample_name}_HISAT2_mapped.sam|awk 'BEGIN{FS="XM:i:"}{if($0 ~/^@/){print $0}else{if ($0 ~ "XM"){split($2,a,"\t");if ( a[1] <= 2 ) print $0 } else print $0 " not have XM tag"}}'|awk 'BEGIN{FS="NH:i:"}{if($0 ~/^@/){print $0}else{if ($0 ~ "NH"){split($2,a,"\t");if ( a[1] == 1 ) print $0 } else print $0 " not have NH tag"  }}' >${HISAT_map}/${sample_name}_unique_mismatch2.sam &
@@ -217,25 +218,14 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
 
         ### 2. BWA 6 mismatches mapping
         
-        bwa mem -t ${threads}  -A 1 -B 4  ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz  ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam |tee 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log
+        # bwa mem -t ${threads}  -A 1 -B 4  ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz  ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam |tee 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log
         
         samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
         bwa mem -t ${threads} -A 1 -B 4 ${genome_index_bwa_mem} \
             ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz \
             ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz 2>${bwa_map}/log_BWA_6mismatch_$(date +%Y_%m_%d).log | \
-        python ${DEMINING_path}/src/bwa_unique_mismatch6.py | \
+        python ${DEMINING_path}/src/bwa_unique_mismatch6_Line.py | \
         samtools sort --threads ${threads} -T /dev/shm/${sample_name}_temp -o ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
-
-
-
-        bwa mem -t ${threads} -A 1 -B 4 ${genome_index_bwa_mem} \
-            ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz \
-            ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log | \
-        python ${DEMINING_path}/src/bwa_unique_mismatch6.py /dev/stdin /dev/stdout | \
-        samtools view -bT ${ref_genome_path} - 2>>$samtools_log_file | \
-        samtools sort --threads ${threads} -o ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
-
-
 
         }
     elif [ "$layout" == "single" ];then
@@ -249,7 +239,12 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         samtools view -bS -f 4 -o ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam 
         bedtools bamtofastq -i  ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam -fq /dev/stdout | gzip >${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz
         ### 2. BWA 6 mismatches mapping
-        bwa mem -t ${threads} ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam
+        # bwa mem -t ${threads} ${genome_index_bwa_mem} ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam
+        samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
+        bwa mem -t ${threads} ${genome_index_bwa_mem} ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz | \
+        python ${DEMINING_path}/src/bwa_unique_mismatch6_Line.py | \
+        samtools sort --threads ${threads} -T /dev/shm/${sample_name}_temp -o ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
+
         }
     else
         echo "Unknown layout:$layout, please specify single or paired." 
@@ -257,10 +252,10 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     fi
     block_output=${fine_tune_path}/${sample_name}_combine.bam
     test -s $block_output -a "${patch_flag}" == "True" ||{  
-    python ${DEMINING_path}/src/bwa_unique_mismatch6.py ${bwa_map}/${sample_name}_bwa_mapped.sam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam 
-    samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
-    samtools view -bT ${ref_genome_path} -o ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam |tee 2>>$samtools_log_file
-    samtools sort ${bwa_map}/${sample_name}_unmapped.nbam -o ${bwa_map}/${sample_name}_unmapped.sort.bam |tee 2>>$samtools_log_file
+    # python ${DEMINING_path}/src/bwa_unique_mismatch6.py ${bwa_map}/${sample_name}_bwa_mapped.sam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam 
+    # samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
+    # samtools view -bT ${ref_genome_path} -o ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam |tee 2>>$samtools_log_file
+    # samtools sort ${bwa_map}/${sample_name}_unmapped.nbam -o ${bwa_map}/${sample_name}_unmapped.sort.bam |tee 2>>$samtools_log_file
     samtools view -H ${bwa_map}/${sample_name}_unmapped.sort.bam > ${bwa_map}/${sample_name}_bwa.header |tee 2>>$samtools_log_file 
     
     wait
