@@ -26,7 +26,7 @@ DEMINING_main_flow(){
     #ref_genome="hg19" or "hg38"
 
     ####################init END#################################################
-    while getopts :1:2:s:o:n:g:t:S:p:C ARGS  
+    while getopts :1:2:s:o:n:g:t:S:p:C: ARGS  
     do  
     case $ARGS in   
         1)  
@@ -278,7 +278,8 @@ STEP2_sam_fine_tune(){
     test -s $block_output -a "${patch_flag}" == "True" ||{  
 
     knownSNP_for_BQSR=$dbSNP_all 
-    picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
+    #picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
+    echo "picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics "
     picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics 
     samtools index ${bam_file_prefix}_rgadd_dedupped.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped.bai && rm ${bam_file_prefix}_rgadd_dedupped.bai
