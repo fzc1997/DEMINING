@@ -352,7 +352,7 @@ _STEP3_Variant_calling_mpileup_frac(){
     chrn=$1
     region=$2
     
-    perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam --region $region -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 |perl -ane 'print "$F[0]:$F[1]\t",join("\t",@F[2..$#F]),"\n"' |python3 ${DEMINING_path}/src/npileup_to_ES_variant_allvariants_Line.py /dev/stdin 0.95 2 >${mpileup_frac_path}/${sample_name}_${chrn}.BQ20o6ES95v2.allvariants${tag}
+    perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam --region $region -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 |perl -ane 'print "$F[0]:$F[1]\t",join("\t",@F[2..$#F]),"\n"' |python3 ${DEMINING_path}/src/npileup_to_ES_variant_allvariants_Line.py /dev/stdin 0.95 2 >/dev/shm/${sample_name}_${chrn}.BQ20o6ES95v2.allvariants${tag}
     
     # test -e ${hyper_path}/${sample_name}_${chrn}.BQ20o6ES95v0${suffix} && rm ${hyper_path}/${sample_name}_${chrn}.BQ20o6ES95v0${suffix}
     # 
@@ -407,12 +407,12 @@ STEP3_Variant_calling(){
     metc $threads2 
     done
     wait
-    cat ${mpileup_frac_path}/${sample_name}_*.BQ20o6ES95v2.allvariants${tag} > ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
+    cat /dev/shm/${sample_name}_*.BQ20o6ES95v2.allvariants${tag} > ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v2.allvariants${tag}
     # test -s ${MutationCallFiltering_wp}/${sample_name}.BQ20o6ES95v2.allvariants${suffix} && rm ${mpileup_frac_path}/${sample_name}_*.BQ20o6ES95v2.allvariants${suffix}
     # test -s $from_bam1 && rm $from_bam1 
     # test -s ${from_bam1}.bai && rm ${from_bam1}.bai
     # test -s ${from_bam1/.bam/.bai} && rm ${from_bam1/.bam/.bai}
-    merm ${mpileup_frac_path}/${sample_name}_*.BQ20o6ES95v2.allvariants${tag} 
+    rm -f /dev/shm/${sample_name}_*.BQ20o6ES95v2.allvariants${tag} 
     }
     # perl ${DEMINING_path}/src/npileupBam_sszhu.pl.backup -i $from_bam -s ${ref_genome_path} -depth 10000000 -minBQ 20 -o 6 -HPB 0 -eSignal 0.95 -v 0 --cRatio 0 >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag}
     # perl -ane 'print "$F[0]:$F[1]\t",join("\t",@F[2..$#F]),"\n"' ${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0${tag} >${MutationCalling_wp}/${sample_name}.BQ20o6ES95v0.new${tag}
