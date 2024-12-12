@@ -278,8 +278,8 @@ STEP2_sam_fine_tune(){
     test -s $block_output -a "${patch_flag}" == "True" ||{  
 
     knownSNP_for_BQSR=$dbSNP_all 
-    #picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
-    echo "picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics "
+    export _JAVA_OPTIONS="-Xmx2G"
+    picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
     picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics 
     samtools index ${bam_file_prefix}_rgadd_dedupped.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped.bai && rm ${bam_file_prefix}_rgadd_dedupped.bai
