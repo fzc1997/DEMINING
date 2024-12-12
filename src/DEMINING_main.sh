@@ -218,6 +218,25 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
         ### 2. BWA 6 mismatches mapping
         
         bwa mem -t ${threads}  -A 1 -B 4  ${genome_index_bwa_mem}  ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz  ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz > ${bwa_map}/${sample_name}_bwa_mapped.sam |tee 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log
+        
+        samtools_log_file=${bwa_map}/samtools_${sample_name}.log 
+        bwa mem -t ${threads} -A 1 -B 4 ${genome_index_bwa_mem} \
+            ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz \
+            ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz 2>${bwa_map}/log_BWA_6mismatch_$(date +%Y_%m_%d).log | \
+        python ${DEMINING_path}/src/bwa_unique_mismatch6.py | \
+        samtools sort --threads ${threads} -T /dev/shm/${sample_name}_temp -o ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
+
+
+
+        bwa mem -t ${threads} -A 1 -B 4 ${genome_index_bwa_mem} \
+            ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz \
+            ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz 2>${bwa_map}/log_BWA_6mismatch_`date +%Y_%m_%d`.log | \
+        python ${DEMINING_path}/src/bwa_unique_mismatch6.py /dev/stdin /dev/stdout | \
+        samtools view -bT ${ref_genome_path} - 2>>$samtools_log_file | \
+        samtools sort --threads ${threads} -o ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
+
+
+
         }
     elif [ "$layout" == "single" ];then
 
@@ -245,12 +264,17 @@ STEP1_HISAT2_2mismatch_following_BWA_6mismatch_mapping(){
     samtools view -H ${bwa_map}/${sample_name}_unmapped.sort.bam > ${bwa_map}/${sample_name}_bwa.header |tee 2>>$samtools_log_file 
     
     wait
-    cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam > ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
-    samtools view -bT ${ref_genome_path} -o  ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
-    samtools sort ${fine_tune_path}/${sample_name}_accepted_hits.nbam -o ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam |tee 2>>$samtools_log_file
+
+    cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam | \
+    samtools view -bT ${ref_genome_path} - 2>>$samtools_log_file | \
+    samtools sort --threads ${threads} -o ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam 2>>$samtools_log_file ######## Thu Dec 12 15:40:10 CST 2024, One step
+
+    # cat ${bwa_map}/${sample_name}_bwa.header ${HISAT_map}/${sample_name}_unique_mismatch2.sam > ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
+    # samtools view -bT ${ref_genome_path} -o  ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.nsam |tee 2>>$samtools_log_file
+    # samtools sort ${fine_tune_path}/${sample_name}_accepted_hits.nbam -o ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam |tee 2>>$samtools_log_file
 
     samtools merge -f ${fine_tune_path}/${sample_name}_combine.bam ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_unmapped.sort.bam 2>>$samtools_log_file
-    samtools flagstat  ${fine_tune_path}/${sample_name}_combine.bam |tee >${fine_tune_path}/${sample_name}_combine_flagstat.log 
+    samtools flagstat ${fine_tune_path}/${sample_name}_combine.bam |tee >${fine_tune_path}/${sample_name}_combine_flagstat.log & 
     #samtools index ${fine_tune_path}/${sample_name}_combine.bam  2>>$samtools_log_file
     samtools index ${fine_tune_path}/${sample_name}_combine.bam || samtools index -c ${fine_tune_path}/${sample_name}_combine.bam |tee 2>>$samtools_log_file ###### Sat Oct 8 13:54:25 CST 2022
     need_rm_internal_file_list=(${rRNAdeplete_path}/${sample_name}-rRNA_unmapped_sort.bam ${fine_tune_path}/${sample_name}_accepted_hits.nsam ${fine_tune_path}/${sample_name}_accepted_hits.nbam ${fine_tune_path}/${sample_name}_accepted_hits.sort.bam ${bwa_map}/${sample_name}_bwa.header ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.nbam ${bwa_map}/${sample_name}_unmapped.sort.bam ${bwa_map}/${sample_name}_bwa_unique_mis6_mapq0.sam ${bwa_map}/${sample_name}_bwa_mapped.sam ${HISAT_map}/${sample_name}_HISAT2_mapped.sam ${HISAT_map}/${sample_name}_unique_mismatch2.sam ${HISAT_map}/${sample_name}_unmapped_1.fastq.gz ${HISAT_map}/${sample_name}_unmapped_2.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.fastq.gz  ${HISAT_map}/${sample_name}_hisat2_unmap.readid ${HISAT_map}/${sample_name}_un_conc_2.fastq.gz ${HISAT_map}/${sample_name}_un_conc_1.fastq.gz ${HISAT_map}/${sample_name}_HISAT2_unmapped.bam) #
