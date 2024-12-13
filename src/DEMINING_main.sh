@@ -320,17 +320,87 @@ STEP2_sam_fine_tune(){
     }
 
     echo "[`date`] gatk SplitNCigarReads" 
-    gatk SplitNCigarReads -R ${ref_genome_path} -I ${bam_file_prefix}_rgadd_dedupped.bam -O ${bam_file_prefix}_rgadd_dedupped_split.bam --create-output-bam-index false #  change create-output-bam-index from true (default) to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
+    #gatk SplitNCigarReads -R ${ref_genome_path} -I ${bam_file_prefix}_rgadd_dedupped.bam -O ${bam_file_prefix}_rgadd_dedupped_split.bam --create-output-bam-index false #  change create-output-bam-index from true (default) to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
+    # 获取染色体列表
+    chromosomes=$(samtools idxstats ${bam_file_prefix}_rgadd_dedupped.bam | cut -f1 | grep -v '*')
+    # 创建任务列表
+    tasks_split=()
+    for chr in $chromosomes; do
+        tasks_split+=("gatk SplitNCigarReads \
+            -R ${ref_genome_path} \
+            -I ${bam_file_prefix}_rgadd_dedupped.bam \
+            -O ${bam_file_prefix}_split_${chr}.bam \
+            -L ${chr} \
+            --create-output-bam-index false")
+    done
+
+    # 并行执行任务
+    printf "%s\n" "${tasks_split[@]}" | metc2 ${threads} 
+
+    # 合并结果
+    samtools merge -@ ${threads} ${bam_file_prefix}_rgadd_dedupped_split.bam ${bam_file_prefix}_split_*.bam
+    rm -f ${bam_file_prefix}_split_*.bam &
+
+
     echo "[`date`] samtools index" 
     samtools index ${bam_file_prefix}_rgadd_dedupped_split.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped_split.bai && rm ${bam_file_prefix}_rgadd_dedupped_split.bai
     samtools index -c ${bam_file_prefix}_rgadd_dedupped_split.bam ###### Sun Oct 9 13:35:07 CST 2022
     }
     echo "[`date`] gatk BaseRecalibrator" 
-    gatk BaseRecalibrator -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam --known-sites ${knownSNP_for_BQSR}  -O ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv 
+    # gatk BaseRecalibrator -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam --known-sites ${knownSNP_for_BQSR}  -O ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv 
+
+    # 创建任务列表
+    tasks_recal=()
+    for chr in $chromosomes; do
+        tasks_recal+=("gatk BaseRecalibrator \
+            -R ${ref_genome_path} \
+            -I ${bam_file_prefix}_rgadd_dedupped_split.bam \
+            --known-sites ${knownSNP_for_BQSR} \
+            -O ${bam_file_prefix}_recal_${chr}.table \
+            -L ${chr}")
+    done
+
+    # 并行执行任务
+    printf "%s\n" "${tasks_recal[@]}" | metc2 ${threads}  # 使用 4 个线程并行处理
+
+    # 合并结果
+    gatk GatherBQSRReports \
+        -I $(ls ${bam_file_prefix}_recal_*.table | tr '\n' ' ') \
+        -O ${bam_file_prefix}_final_recal.table
+    rm -f ${bam_file_prefix}_recal_*.table &
+
+
+    
+
+
+
+
+    
     echo "[`date`] gatk ApplyBQSR" 
-    gatk ApplyBQSR  -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam --create-output-bam-index false # change CREATE_INDEX from true to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
+    #gatk ApplyBQSR  -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam --create-output-bam-index false # change CREATE_INDEX from true to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
     #gatk ApplyBQSR  -R ${ref_genome_path} -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam
+
+    # 创建任务列表
+    tasks_apply=()
+    for chr in $chromosomes; do
+        tasks_apply+=("gatk ApplyBQSR \
+            -R ${ref_genome_path} \
+            -I ${bam_file_prefix}_rgadd_dedupped_split.bam \
+            --bqsr-recal-file ${bam_file_prefix}_final_recal.table \
+            -O ${bam_file_prefix}_recal_${chr}.bam \
+            -L ${chr} \
+            --create-output-bam-index false")
+    done
+
+    # 并行执行任务
+    printf "%s\n" "${tasks_apply[@]}" | metc2 ${threads}  # 使用 4 个线程并行处理
+
+    # 合并结果
+    samtools merge -@ ${threads} ${bam_file_prefix}_rgadd_dedupped_split_recal.bam ${bam_file_prefix}_recal_*.bam
+    rm -f ${bam_file_prefix}_recal_*.bam &
+
+
     echo "[`date`] samtools index" 
     samtools index ${bam_file_prefix}_rgadd_dedupped_split_recal.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped_split_recal.bai && rm ${bam_file_prefix}_rgadd_dedupped_split_recal.bai
@@ -483,7 +553,40 @@ merm(){
     do  
     if [ -e $file1 ];then rm -r $file1;fi
     done  
-}  
+}
+# Function to dynamically control concurrency
+metc2() {
+    local max_threads=$1  # Maximum number of concurrent threads
+    # Create a semaphore to limit the number of threads
+    semaphore="/tmp/semaphore_$$"
+    mkfifo "$semaphore"
+    exec 3<> "$semaphore"
+    rm "$semaphore"
+
+    # Initialize the semaphore with $max_threads slots
+    for _ in $(seq 1 "$max_threads"); do
+        echo >&3
+    done
+
+    # Function to execute a task and release a slot
+    execute_task() {
+        local task_cmd=$1
+        eval "$task_cmd"  # Execute the provided task command
+        echo >&3  # Release a slot
+    }
+
+    # Main logic: execute tasks dynamically
+    while IFS= read -r task; do
+        read -u3  # Acquire a slot
+        {
+            execute_task "$task"
+        } &
+    done
+
+    wait  # Wait for all background tasks to complete
+    exec 3>&-  # Close the semaphore
+}
+
 DEMINING_src_path=$(cd "$(dirname "$0")";pwd)
 DEMINING_path=$(dirname $DEMINING_src_path)
 ref_genome_path=$genome_fasta
