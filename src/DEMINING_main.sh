@@ -338,7 +338,7 @@ STEP2_sam_fine_tune(){
     printf "%s\n" "${tasks_split[@]}" | metc2 ${threads} 
 
     # 合并结果
-    samtools merge -@ ${threads} ${bam_file_prefix}_rgadd_dedupped_split.bam ${bam_file_prefix}_split_*.bam
+    samtools merge -f -@ ${threads} ${bam_file_prefix}_rgadd_dedupped_split.bam ${bam_file_prefix}_split_*.bam
     rm -f ${bam_file_prefix}_split_*.bam &
 
 
@@ -397,7 +397,7 @@ STEP2_sam_fine_tune(){
     printf "%s\n" "${tasks_apply[@]}" | metc2 ${threads}  # 使用 4 个线程并行处理
 
     # 合并结果
-    samtools merge -@ ${threads} ${bam_file_prefix}_rgadd_dedupped_split_recal.bam ${bam_file_prefix}_recal_*.bam
+    samtools merge -f -@ ${threads} ${bam_file_prefix}_rgadd_dedupped_split_recal.bam ${bam_file_prefix}_recal_*.bam
     rm -f ${bam_file_prefix}_recal_*.bam &
 
 
