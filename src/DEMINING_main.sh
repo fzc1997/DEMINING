@@ -308,11 +308,11 @@ STEP2_sam_fine_tune(){
     test -s $block_output -a "${patch_flag}" == "True" ||{  
 
     knownSNP_for_BQSR=$dbSNP_all 
-    export _JAVA_OPTIONS="-Xmx2G"
+    export _JAVA_OPTIONS="-Xmx16G"
     echo "[`date`] AddOrReplaceReadGroups" 
     picard AddOrReplaceReadGroups I=${bam_file} O=${bam_file_prefix}_rgadd.bam SO=coordinate RGID=1 RGLB=lib1 RGPL=illumina RGPU=unit1 RGSM=20 
     echo "[`date`] MarkDuplicates" 
-    picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics 
+    picard MarkDuplicates I=${bam_file_prefix}_rgadd.bam O=${bam_file_prefix}_rgadd_dedupped.bam CREATE_INDEX=false VALIDATION_STRINGENCY=SILENT M=${bam_file_prefix}_rgadd_MarkDuplicates_output.metrics REMOVE_DUPLICATES=true 
     echo "[`date`] samtools index" 
     samtools index ${bam_file_prefix}_rgadd_dedupped.bam ||{
     test -s ${bam_file_prefix}_rgadd_dedupped.bai && rm ${bam_file_prefix}_rgadd_dedupped.bai
@@ -362,7 +362,7 @@ STEP2_sam_fine_tune(){
     done
 
     # 并行执行任务
-    printf "%s\n" "${tasks_recal[@]}" | metc2 ${threads}  # 使用 4 个线程并行处理
+    printf "%s\n" "${tasks_recal[@]}" | metc2 ${threads}  
 
     # 合并结果
     gatk GatherBQSRReports \
