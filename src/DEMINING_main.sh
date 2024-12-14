@@ -365,9 +365,12 @@ STEP2_sam_fine_tune(){
     printf "%s\n" "${tasks_recal[@]}" | metc2 ${threads}  
 
     # 合并结果
+    # gatk GatherBQSRReports \
+    #     -I $(ls ${bam_file_prefix}_recal_*.table | tr '\n' ' ') \
+    #     -O ${bam_file_prefix}_final_recal.table
     gatk GatherBQSRReports \
-        -I $(ls ${bam_file_prefix}_recal_*.table | tr '\n' ' ') \
-        -O ${bam_file_prefix}_final_recal.table
+    $(for file in ${bam_file_prefix}_recal_*.table; do echo -I "$file"; done) \
+    -O ${bam_file_prefix}_final_recal.table
     rm -f ${bam_file_prefix}_recal_*.table &
 
 
