@@ -373,13 +373,6 @@ STEP2_sam_fine_tune(){
     -O ${bam_file_prefix}_final_recal.table
     rm -f ${bam_file_prefix}_recal_*.table &
 
-
-    
-
-
-
-
-    
     echo "[`date`] gatk ApplyBQSR" 
     #gatk ApplyBQSR  -R ${ref_genome_path}  -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam --create-output-bam-index false # change CREATE_INDEX from true to false, because index bam failed when contig longer than 512M. ###### Sun Oct 9 13:36:57 CST 2022
     #gatk ApplyBQSR  -R ${ref_genome_path} -I ${bam_file_prefix}_rgadd_dedupped_split.bam  --bqsr-recal-file ${bam_file_prefix}_rgadd_dedupped_split_recal_gatk.grv -O ${bam_file_prefix}_rgadd_dedupped_split_recal.bam
